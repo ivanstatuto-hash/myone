@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>myOne</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{background:#0b1120;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;color:#fff;overscroll-behavior:none;-webkit-text-size-adjust:100%}
+::-webkit-scrollbar{display:none}
+input,select,textarea,button{font-family:inherit;font-size:inherit}
+.wrap{max-width:430px;margin:0 auto;min-height:100vh;background:#0b1120;position:relative}
+.page{padding:0 16px 90px}
+.card{background:#132040;border-radius:14px;padding:14px;border:1px solid #2a3f66;margin-bottom:10px}
+.inp{width:100%;border:1.5px solid #2a4a80;border-radius:10px;padding:11px 14px;font-size:14px;background:#0d1e38;color:#fff;outline:none;margin-bottom:10px;display:block;appearance:none;-webkit-appearance:none}
+.lbl{font-size:11px;font-weight:700;color:#c0cfe8;margin-bottom:4px;display:block;letter-spacing:.5px}
+.badge{border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;color:#fff;display:inline-block;white-space:nowrap}
+.hdr{position:sticky;top:0;z-index:100;background:rgba(11,17,32,.97);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);padding:11px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #2a3f66}
+.nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:rgba(11,17,32,.98);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid #2a3f66;padding:4px 0;display:flex;justify-content:space-around;z-index:100}
+.navbtn{display:flex;flex-direction:column;align-items:center;gap:2px;background:none;border:none;cursor:pointer;padding:5px 10px;border-radius:10px}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:500;display:flex;align-items:flex-end;justify-content:center}
+.modal{background:#0f1929;border-radius:20px 20px 0 0;width:100%;max-width:430px;max-height:88vh;overflow-y:auto;border:1px solid #2a3f66;padding:20px}
+.tabs{display:flex;background:#132040;border-radius:12px;border:1px solid #2a3f66;overflow:hidden;margin-bottom:10px}
+.tab{flex:1;padding:11px 4px;border:none;background:transparent;cursor:pointer;font-size:10px;display:flex;flex-direction:column;align-items:center;gap:2px;color:#c0cfe8;border-bottom:2px solid transparent}
+.tab.on{color:#fff;border-bottom-color:#2d6ef5}
+.evrow{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid #2a3f66;cursor:pointer}
+.chkrow{display:flex;align-items:center;gap:10px;padding:11px 14px;border:1.5px solid #2a3f66;border-radius:12px;margin-bottom:7px;cursor:pointer;background:#0d1527;transition:all .15s}
+.chkrow.on{border-color:#f5c842;background:#1a1500}
+.sechdr{font-weight:800;font-size:13px;color:#fff;border-bottom:1px solid #2a3f66;padding-bottom:6px;margin-bottom:10px}
+.btn{width:100%;background:linear-gradient(135deg,#2d6ef5,#1a4fc4);border:none;border-radius:12px;padding:12px 0;color:#fff;font-weight:700;font-size:14px;cursor:pointer;display:block;margin-bottom:8px;text-align:center}
+.btn-red{background:transparent;border:1.5px solid #e74c3c;color:#e74c3c}
+.btn-green{background:linear-gradient(135deg,#2ecc71,#1e8449)}
+.sidebar{position:fixed;inset:0;z-index:200;display:flex}
+.sidebar-panel{width:80%;max-width:280px;background:#0b1120;height:100%;overflow-y:auto;box-shadow:4px 0 30px rgba(0,0,0,.8)}
+.sidebar-overlay{flex:1;background:rgba(0,0,0,.4)}
+select.inp option{background:#0d1e38;color:#fff}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<script>
+"use strict";
+var C={bg:"#0b1120",blue:"#2d6ef5",dark:"#1a4fc4",card:"#132040",border:"#2a3f66",
+  green:"#2ecc71",orange:"#f5a623",red:"#e74c3c",accent:"#f5c842",sub:"#c0cfe8"};
+var LT={einzel45:{label:"Einzellektion",mins:45,color:"#2d6ef5"},
+  doppel90:{label:"Doppellektion",mins:90,color:"#8e44ad"},
+  pruefung:{label:"Fahrprüfung",mins:60,color:"#f5a623"}};
+var FC={aktiv:"#2ecc71",inaktiv:"#f5a623",abgeschlossen:"#7f8c8d",archiviert:"#95a5a6"};
+var FL={aktiv:"🟢 Aktiv",inaktiv:"🟡 Inaktiv",abgeschlossen:"⬛ Abgeschl.",archiviert:"🗄️ Archiviert"};
+
+var S={page:"dashboard",student:null,sidebar:false,students:[],anfragen:[],
+  profil:{vorname:"",nachname:"",rolle:"Fahrlehrer",standort:"myOne Fahrschule",email:"",telefon:"",notiz:"",foto:null}};
+
+function setState(u){Object.assign(S,u);render();}
+
+// DOM helpers
+function el(tag,cls,style,children,events){
+  var e=document.createElement(tag);
+  if(cls)e.className=cls;
+  if(style)Object.assign(e.style,style);
+  if(children){
+    var arr=Array.isArray(children)?children:[children];
+    arr.forEach(function(c){
+      if(c==null||c===false||c===undefined)return;
+      e.appendChild(typeof c==="string"||typeof c==="number"?document.createTextNode(String(c)):c);
+    });
+  }
+  if(events)Object.keys(events).forEach(function(k){e.addEventListener(k,events[k]);});
+  return e;
+}
+function div(style,children,cls){return el("div",cls||null,style,children);}
+function span(text,style){return el("span",null,style,[text]);}
+function btn(text,onClick,style,cls){
+  var b=el("button",cls||null,style,typeof text==="string"?[text]:(Array.isArray(text)?text:[text]));
+  b.addEventListener("click",onClick);
+  return b;
+}
+function card(children,style){
+  var e=el("div","card",style,null);
+  (Array.isArray(children)?children:[children]).forEach(function(c){if(c)e.appendChild(typeof c==="string"?document.createTextNode(c):c);});
+  return e;
+}
+function badge(text,color){return el("span","badge",{background:color||C.blue},[text]);}
+function sechdr(text){return el("div","sechdr",null,[text]);}
+function inpField(lbl,val,cb,type){
+  var w=div({marginBottom:"10px"});
+  w.appendChild(el("label","lbl",null,[lbl]));
+  var i=el("input","inp",{marginBottom:"0"});
+  i.type=type||"text";i.value=val||"";
+  i.addEventListener("input",function(){cb(i.value);});
+  w.appendChild(i);
+  return w;
+}
+function selField(lbl,val,cb,opts){
+  var w=div({marginBottom:"10px"});
+  w.appendChild(el("label","lbl",null,[lbl]));
+  var s=el("select","inp",{marginBottom:"0"});
+  opts.forEach(function(o){var op=el("option",null,null,[o]);op.value=o;if(o===val)op.selected=true;s.appendChild(op);});
+  s.addEventListener("change",function(){cb(s.value);});
+  w.appendChild(s);
+  return w;
+}
+function chkField(lbl,icon,checked,cb){
+  var row=el("div","chkrow"+(checked?" on":""),null);
+  var box=div({width:"20px",height:"20px",borderRadius:"4px",border:"2px solid "+(checked?C.accent:C.border),background:checked?C.accent:"transparent",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"12px",color:"#000",fontWeight:"900",flexShrink:"0"},[checked?"✓":""]);
+  row.appendChild(box);
+  row.appendChild(span(icon,{fontSize:"18px"}));
+  row.appendChild(span(lbl,{fontSize:"14px",fontWeight:checked?"700":"400",color:checked?C.accent:"#fff",marginLeft:"4px"}));
+  row.addEventListener("click",function(){cb(!checked);});
+  return row;
+}
+function fmtD(ds){return ds?ds.split("-").reverse().join("."):"—";}
+function tod(){return new Date().toISOString().slice(0,10);}
+function calcEnd(t,m){if(!t)return"";var p=t.split(":"),h=+p[0],mn=+p[1],tot=h*60+mn+m;return String(Math.floor(tot/60)).padStart(2,"0")+":"+String(tot%60).padStart(2,"0");}
+function ds(d){return d.toISOString().slice(0,10);}
+function isToday(d){return ds(d)===tod();}
+function getWeek(off){var days=[],m=new Date(),d=m.getDay();m.setDate(m.getDate()+(d===0?-6:1-d)+(off||0)*7);for(var i=0;i<7;i++){var x=new Date(m);x.setDate(m.getDate()+i);days.push(x);}return days;}
+function openModal(children){
+  closeModal();
+  var bg=el("div","modal-bg",null);
+  var m=el("div","modal",null);
+  (Array.isArray(children)?children:[children]).forEach(function(c){if(c)m.appendChild(c);});
+  bg.appendChild(m);
+  bg.addEventListener("click",function(e){if(e.target===bg)closeModal();});
+  document.body.appendChild(bg);
+}
+function closeModal(){var bg=document.querySelector(".modal-bg");if(bg)bg.remove();}
+
+// ── HEADER ─────────────────────────────────────────────────────────────────
+function mkHeader(){
+  var h=el("div","hdr");
+  var left=div({display:"flex",alignItems:"center",gap:"10px"});
+  left.appendChild(btn("☰",function(){setState({sidebar:true});},
+    {background:"#1a2a4a",border:"1px solid "+C.border,borderRadius:"11px",width:"38px",height:"38px",fontSize:"17px",color:"#fff"}));
+  var logo=div({marginLeft:"4px"});
+  logo.appendChild(div({fontSize:"14px",fontWeight:"900",lineHeight:"1",color:"#fff"},[span("my"),span("One",{color:C.blue})]));
+  logo.appendChild(div({fontSize:"8px",color:C.sub,letterSpacing:"2px"},["FAHRSCHULE"]));
+  left.appendChild(logo);
+  h.appendChild(left);
+  h.appendChild(btn("↻",function(){render();},
+    {background:"#1a2a4a",border:"1px solid "+C.border,borderRadius:"11px",width:"38px",height:"38px",fontSize:"17px",color:"#fff"}));
+  return h;
+}
+
+// ── BOTTOM NAV ─────────────────────────────────────────────────────────────
+function mkNav(){
+  var nav=el("div","nav");
+  [["🏠","Home","dashboard"],["👥","Schüler","schueler"],["📅","Kalender","kalender"],["📊","Statistik","pruefung"],["👤","Profil","profil"]].forEach(function(it){
+    var b=el("button","navbtn");
+    b.appendChild(span(it[0],{fontSize:"20px"}));
+    b.appendChild(span(it[1],{fontSize:"9px",color:S.page===it[2]?C.accent:C.sub,fontWeight:S.page===it[2]?"700":"400"}));
+    b.addEventListener("click",function(){setState({page:it[2],student:it[2]!=="schueler"?null:S.student});});
+    nav.appendChild(b);
+  });
+  return nav;
+}
+
+// ── SIDEBAR ────────────────────────────────────────────────────────────────
+function mkSidebar(){
+  if(!S.sidebar)return null;
+  var wrap=el("div","sidebar");
+  var panel=el("div","sidebar-panel");
+  var hdr=div({padding:"22px 18px 14px",display:"flex",alignItems:"center",gap:"10px"});
+  hdr.appendChild(div({width:"30px",height:"30px",borderRadius:"8px",background:C.blue,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:"900",fontSize:"13px",color:"#fff"},["m1"]));
+  var ld=div({});ld.appendChild(div({fontSize:"13px",fontWeight:"900",color:"#fff"},[span("my"),span("One",{color:C.blue})]));ld.appendChild(div({fontSize:"8px",color:C.sub,letterSpacing:"2px"},["FAHRSCHULE"]));
+  hdr.appendChild(ld);
+  hdr.appendChild(btn("✕",function(){setState({sidebar:false});},{marginLeft:"auto",background:"#1e2d45",border:"1px solid "+C.border,borderRadius:"8px",padding:"5px 8px",color:"#fff"}));
+  panel.appendChild(hdr);
+  [["🏠","Dashboard","dashboard"],["👥","Meine Schüler","schueler"],["📅","Kalender","kalender"],["📊","Prüfungsstatistik","pruefung"],["👤","Mein Profil","profil"]].forEach(function(it){
+    var active=S.page===it[2];
+    var row=div({display:"flex",alignItems:"center",gap:"12px",padding:"12px 18px",cursor:"pointer",background:active?"#1a2040":"transparent",borderLeft:active?"3px solid "+C.accent:"3px solid transparent",color:active?C.accent:C.sub,fontWeight:active?"700":"400"});
+    row.appendChild(span(it[0],{fontSize:"18px"}));row.appendChild(span(it[1],{fontSize:"14px"}));
+    row.addEventListener("click",function(){setState({sidebar:false,page:it[2],student:null});});
+    panel.appendChild(row);
+  });
+  var p=S.profil,ini=((p.vorname||"?")[0]+(p.nachname||"?")[0]).toUpperCase();
+  var usr=div({margin:"14px 18px",borderTop:"1px solid "+C.border,paddingTop:"12px",display:"flex",alignItems:"center",gap:"10px"});
+  usr.appendChild(div({width:"32px",height:"32px",borderRadius:"50%",background:"linear-gradient(135deg,"+C.accent+",#e67e22)",display:"flex",alignItems:"center",justifyContent:"center",color:"#000",fontWeight:"900",fontSize:"13px"},[ini]));
+  var ud=div({});ud.appendChild(div({fontWeight:"700",fontSize:"13px",color:"#fff"},[(p.vorname||"Fahrlehrer")+" "+(p.nachname||"")]));ud.appendChild(div({fontSize:"11px",color:C.sub},[p.rolle||"Fahrlehrer"]));
+  usr.appendChild(ud);panel.appendChild(usr);
+  var ov=el("div","sidebar-overlay");
+  ov.addEventListener("click",function(){setState({sidebar:false});});
+  panel.addEventListener("click",function(e){e.stopPropagation();});
+  wrap.appendChild(panel);wrap.appendChild(ov);
+  return wrap;
+}
+
+// ── DASHBOARD ──────────────────────────────────────────────────────────────
+function pgDashboard(){
+  var page=el("div","page");
+  var pr=S.profil,ss=S.students;
+  var wr=div({display:"flex",alignItems:"center",gap:"12px",padding:"20px 0 14px"});
+  wr.appendChild(div({width:"48px",height:"48px",borderRadius:"14px",background:"linear-gradient(135deg,"+C.blue+","+C.dark+")",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"16px",fontWeight:"900",color:"#fff",flexShrink:"0"},["m1"]));
+  var wd=div({});
+  wd.appendChild(div({fontSize:"20px",fontWeight:"900",color:"#fff"},[(pr.vorname?"Willkommen, "+pr.vorname+"!":"Willkommen! 👋")]));
+  wd.appendChild(div({fontSize:"11px",color:C.sub},["FAHRSCHULE ",span("myOne",{color:C.blue,fontWeight:"900"})]));
+  wr.appendChild(wd);page.appendChild(wr);
+
+  var fA=ss.filter(function(s){return(s.fallStatus||"aktiv")==="aktiv";}).length;
+  var fI=ss.filter(function(s){return s.fallStatus==="inaktiv";}).length;
+  var fAb=ss.filter(function(s){return s.fallStatus==="abgeschlossen";}).length;
+  var fAr=ss.filter(function(s){return s.fallStatus==="archiviert";}).length;
+  var fc=card([]);fc.appendChild(sechdr("📋 Fälle Übersicht"));
+  var fg=div({display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",marginBottom:"10px"});
+  [[fA,"aktiv",C.green,"🟢 Aktiv"],[fI,"inaktiv",C.orange,"🟡 Inaktiv"],[fAb,"abgeschlossen","#7f8c8d","⬛ Abgeschl."],[fAr,"archiviert","#95a5a6","🗄️ Archiviert"]].forEach(function(it){
+    var cc=div({background:C.card,borderRadius:"14px",padding:"12px 8px",textAlign:"center",cursor:"pointer",border:"1.5px solid "+it[2]+"33"});
+    cc.appendChild(div({fontSize:"24px",fontWeight:"900",color:it[2]},[String(it[0])]));
+    cc.appendChild(div({fontSize:"10px",fontWeight:"700",color:it[2],marginTop:"2px"},[it[3]]));
+    cc.appendChild(div({fontSize:"9px",color:C.sub,marginTop:"3px"},["Details →"]));
+    (function(key,col,lb){cc.addEventListener("click",function(){showFallDetail(key,col,lb);});})(it[1],it[2],it[3]);
+    fg.appendChild(cc);
+  });
+  fc.appendChild(fg);page.appendChild(fc);
+
+  var allP=ss.flatMap(function(s){return(s.lektionen||[]).filter(function(l){return l.type==="pruefung";});});
+  var best=allP.filter(function(l){return l.result==="bestanden";}).length;
+  var rated=allP.filter(function(l){return l.result&&l.result!=="ausstehend";}).length;
+  var q=rated>0?Math.round(best/rated*10000)/100:0;
+  var sg=div({display:"flex",flexWrap:"wrap",gap:"10px",marginBottom:"14px"});
+  [[String(ss.length),"👥","SCHÜLER",fA+" aktiv",C.green],[String(allP.length),"🎯","PRÜFUNGEN",best+" best.",C.sub],[allP.length>0?q+"%":"—","📊","ERFOLGSQUOTE",rated>0?"Bewertet":"Keine",q>=80?C.green:C.orange],[String(ss.filter(function(s){return s.status==="Inaktiv";}).length),"👤","INAKTIVE","Schüler",C.sub]].forEach(function(it){
+    var sc=div({flex:"1 1 45%",minWidth:"0",background:C.card,borderRadius:"14px",padding:"14px",border:"1px solid "+C.border});
+    var top=div({display:"flex",alignItems:"center",gap:"8px",marginBottom:"6px"});
+    top.appendChild(div({background:"#1a2a4a",borderRadius:"10px",padding:"6px",fontSize:"16px"},[it[1]]));
+    top.appendChild(div({fontSize:"10px",fontWeight:"700",color:C.sub,letterSpacing:"1px"},[it[2]]));
+    sc.appendChild(top);sc.appendChild(div({fontSize:"22px",fontWeight:"800",color:"#fff"},[it[0]]));sc.appendChild(div({fontSize:"12px",color:it[4],marginTop:"2px"},[it[3]]));sg.appendChild(sc);
+  });
+  page.appendChild(sg);
+
+  var rt=div({display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"8px"});
+  rt.appendChild(div({fontSize:"15px",fontWeight:"700",color:"#fff"},["👥 Meine Schüler"]));
+  rt.appendChild(btn("Alle →",function(){setState({page:"schueler"});},{background:"none",border:"none",color:C.blue,fontWeight:"700",fontSize:"13px",cursor:"pointer"}));
+  page.appendChild(rt);
+  var recent=ss.filter(function(s){return s.fallStatus!=="archiviert";}).slice(0,5);
+  if(recent.length===0){page.appendChild(card([div({textAlign:"center",padding:"20px 0",color:C.sub},["Noch keine Schüler"])]));}
+  else{
+    var rl=card([]);
+    recent.forEach(function(s,i){
+      var row=div({display:"flex",alignItems:"center",gap:"10px",padding:"10px 0",borderBottom:i<recent.length-1?"1px solid "+C.border:"none",cursor:"pointer"});
+      row.appendChild(div({width:"34px",height:"34px",borderRadius:"50%",background:"#1a2a4a",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"14px",flexShrink:"0"},["👤"]));
+      var inf=div({flex:"1",minWidth:"0"});inf.appendChild(div({fontWeight:"600",fontSize:"13px",color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"},[s.name]));inf.appendChild(div({fontSize:"11px",color:C.sub},[(s.lektionen||[]).length+" Lektionen"]));
+      row.appendChild(inf);row.appendChild(badge(FL[s.fallStatus||"aktiv"],FC[s.fallStatus||"aktiv"]));
+      (function(stu){row.addEventListener("click",function(){setState({page:"schueler",student:stu});});})(s);
+      rl.appendChild(row);
+    });
+    page.appendChild(rl);
+  }
+  return page;
+}
+
+function showFallDetail(key,col,lb){
+  var list=S.students.filter(function(s){return(s.fallStatus||"aktiv")===key;});
+  var cc=[];
+  var hdr=div({display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"12px"});
+  hdr.appendChild(div({fontWeight:"800",fontSize:"17px",color:col},[lb]));
+  hdr.appendChild(btn("✕",closeModal,{background:C.card,border:"1px solid "+C.border,borderRadius:"9px",width:"30px",height:"30px",color:"#fff"}));
+  cc.push(hdr);
+  if(list.length===0){cc.push(div({textAlign:"center",padding:"20px 0",color:C.sub},["Keine Schüler"]));}
+  else{list.forEach(function(s){
+    var row=div({display:"flex",alignItems:"center",gap:"10px",padding:"11px",background:C.card,borderRadius:"12px",marginBottom:"8px",cursor:"pointer",border:"1px solid "+C.border});
+    row.appendChild(div({width:"36px",height:"36px",borderRadius:"50%",background:"#1a2a4a",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:"0"},["👤"]));
+    var inf=div({flex:"1"});inf.appendChild(div({fontWeight:"700",fontSize:"13px",color:"#fff"},[s.name]));inf.appendChild(div({fontSize:"11px",color:C.sub},[(s.lektionen||[]).length+" Lektionen"]));
+    row.appendChild(inf);row.appendChild(span("›",{color:C.sub,fontSize:"16px"}));
+    (function(stu){row.addEventListener("click",function(){closeModal();setState({page:"schueler",student:stu});});})(s);
+    cc.push(row);
+  });}
+  openModal(cc);
+}
+
+// ── SCHUELER LIST ───────────────────────────────────────────────────────────
+function pgSchuelerList(){
+  var page=el("div","page");
+  var filter="alle",search="";
+  page.appendChild(div({padding:"20px 0 4px",fontSize:"20px",fontWeight:"800",color:"#fff"},["👥 Schüler"]));
+
+  S.anfragen.forEach(function(a){
+    var ac=div({background:C.card,border:"1.5px solid "+C.blue,borderRadius:"14px",padding:"14px",marginBottom:"10px"});
+    ac.appendChild(div({fontWeight:"800",fontSize:"14px",color:"#fff",marginBottom:"2px"},[a.vorname+" "+a.nachname]));
+    if(a.email)ac.appendChild(div({fontSize:"12px",color:C.sub},[a.email]));
+    ac.appendChild(badge("🌐 Amelia · "+(a.angemeldetAm||"Heute"),"#5b3a9b"));
+    var br=div({display:"flex",gap:"8px",marginTop:"10px"});
+    var aid=a.id;
+    br.appendChild(btn("✅ Als Schüler aufnehmen",function(){
+      var ns=Object.assign({},a,{id:Date.now(),name:a.vorname+" "+a.nachname,status:"Aktiv",fallStatus:"aktiv",lektionen:[],lektionenGuthaben:0,chfGuthaben:0});
+      setState({students:S.students.concat([ns]),anfragen:S.anfragen.filter(function(x){return x.id!==aid;})});
+    },{flex:"1",background:"linear-gradient(135deg,"+C.green+",#1e8449)",border:"none",borderRadius:"9px",padding:"9px 0",color:"#fff",fontWeight:"700",fontSize:"12px"}));
+    br.appendChild(btn("✕",function(){setState({anfragen:S.anfragen.filter(function(x){return x.id!==aid;});});},{width:"40px",background:"transparent",border:"1px solid "+C.red,borderRadius:"9px",padding:"9px 0",color:C.red,fontWeight:"700"}));
+    ac.appendChild(br);page.appendChild(ac);
+  });
+
+  var addBtn=btn("+ Neuen Schüler hinzufügen",function(){pgAddSchueler();},null,"btn");
+  page.appendChild(addBtn);
+
+  var fr=div({display:"flex",gap:"6px",marginBottom:"10px",overflowX:"auto",paddingBottom:"4px"});
+  [["alle","Alle"],["aktiv","🟢 Aktiv"],["inaktiv","🟡 Inaktiv"],["archiviert","🗄️ Archiviert"]].forEach(function(f){
+    var cnt=f[0]==="alle"?S.students.length:S.students.filter(function(s){return(s.fallStatus||"aktiv")===f[0];}).length;
+    var active=filter===f[0]||(f[0]==="alle"&&filter==="alle");
+    var fb=btn(f[1]+" ("+cnt+")",function(){filter=f[0];refreshL();},{flexShrink:"0",padding:"7px 13px",borderRadius:"20px",border:"1.5px solid "+(active?C.blue:C.border),background:active?C.blue+"22":"transparent",color:active?C.blue:C.sub,fontWeight:"700",fontSize:"11px",whiteSpace:"nowrap"});
+    fr.appendChild(fb);
+  });
+  page.appendChild(fr);
+
+  var si=el("input","inp");si.type="text";si.placeholder="🔍 Suchen...";si.value="";
+  si.addEventListener("input",function(){search=si.value;refreshL();});
+  page.appendChild(si);
+
+  var lc=div({});page.appendChild(lc);
+  function refreshL(){
+    lc.innerHTML="";
+    var list=S.students.filter(function(s){return(filter==="alle"||(s.fallStatus||"aktiv")===filter)&&(!search||s.name.toLowerCase().indexOf(search.toLowerCase())>=0);});
+    if(list.length===0){lc.appendChild(card([div({textAlign:"center",padding:"20px 0",color:C.sub},[S.students.length===0?"Noch keine Schüler":"Nichts gefunden"])]));return;}
+    var rl=card([]);
+    list.forEach(function(s,i){
+      var row=div({display:"flex",alignItems:"center",gap:"10px",padding:"11px 0",borderBottom:i<list.length-1?"1px solid "+C.border:"none",cursor:"pointer",opacity:s.fallStatus==="archiviert"?"0.6":"1"});
+      row.appendChild(div({width:"36px",height:"36px",borderRadius:"50%",background:"#1a2a4a",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"16px",flexShrink:"0"},[s.fallStatus==="archiviert"?"🗄️":"👤"]));
+      var inf=div({flex:"1",minWidth:"0"});inf.appendChild(div({fontWeight:"600",fontSize:"14px",color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"},[s.name]));inf.appendChild(div({fontSize:"11px",color:C.sub},[(s.lektionen||[]).length+" Lektionen"]));
+      row.appendChild(inf);row.appendChild(badge(FL[s.fallStatus||"aktiv"],FC[s.fallStatus||"aktiv"]));
+      (function(stu){row.addEventListener("click",function(){setState({page:"schueler",student:stu});});})(s);
+      rl.appendChild(row);
+    });
+    lc.appendChild(rl);
+  }
+  refreshL();
+  return page;
+}
+
+function pgAddSchueler(){
+  var page=el("div","page");
+  page.appendChild(div({padding:"20px 0 4px",fontSize:"20px",fontWeight:"800",color:"#fff"},["👥 Schüler"]));
+  var ns={vorname:"",nachname:"",email:"",telefon:"",geburtsdatum:"",lernfahrAblauf:"",lfaPin:"",strasse:"",hausnummer:"",plz:"",ort:"",status:"Aktiv",fallStatus:"aktiv",getriebe:"Automat",lehrplan:"Kategorie B - Auto (B)",vkuAbsolviert:false,brillentraeger:false,versicherungBezahlt:false,kontrollfahrt:false,taxiPruefung:false,schuelerAktiv:true,lernfahrImg:null,docs:[],lektionen:[],lektionenGuthaben:0,chfGuthaben:0};
+  var fc=card([],{marginBottom:"10px"});
+  fc.appendChild(div({fontWeight:"800",fontSize:"15px",color:C.accent,marginBottom:"12px"},["➕ Neuer Schüler"]));
+  var p1=card([],{marginBottom:"8px"});p1.appendChild(sechdr("👤 Persönliche Informationen"));
+  var nr=div({display:"flex",gap:"8px"});nr.appendChild(inpField("Vorname *",ns.vorname,function(v){ns.vorname=v;}));nr.appendChild(inpField("Nachname *",ns.nachname,function(v){ns.nachname=v;}));
+  p1.appendChild(nr);p1.appendChild(inpField("E-Mail",ns.email,function(v){ns.email=v;},"email"));p1.appendChild(inpField("Telefon",ns.telefon,function(v){ns.telefon=v;},"tel"));p1.appendChild(inpField("Geburtsdatum",ns.geburtsdatum,function(v){ns.geburtsdatum=v;},"date"));p1.appendChild(inpField("LFA Ablaufdatum",ns.lernfahrAblauf,function(v){ns.lernfahrAblauf=v;},"date"));p1.appendChild(inpField("LFA Pin",ns.lfaPin,function(v){ns.lfaPin=v;}));
+  fc.appendChild(p1);
+  var p2=card([],{marginBottom:"8px"});p2.appendChild(sechdr("📍 Adresse"));p2.appendChild(inpField("Strasse",ns.strasse,function(v){ns.strasse=v;}));var ar=div({display:"flex",gap:"6px"});ar.appendChild(inpField("PLZ",ns.plz,function(v){ns.plz=v;}));ar.appendChild(inpField("Ort",ns.ort,function(v){ns.ort=v;}));p2.appendChild(ar);fc.appendChild(p2);
+  var p3=card([],{marginBottom:"8px"});p3.appendChild(sechdr("🚗 Ausbildung"));p3.appendChild(selField("Lehrplan",ns.lehrplan,function(v){ns.lehrplan=v;},["Kategorie B - Auto (B)","BPT","Kontrollfahrt"]));p3.appendChild(selField("Getriebe",ns.getriebe,function(v){ns.getriebe=v;},["Automat","Manuell","Beide"]));p3.appendChild(selField("Fall-Status",ns.fallStatus,function(v){ns.fallStatus=v;},["aktiv","inaktiv","abgeschlossen"]));fc.appendChild(p3);
+  var p4=card([],{marginBottom:"8px"});p4.appendChild(sechdr("✅ Zusätzliche Informationen"));
+  ["vkuAbsolviert|VKU absolviert|✅","brillentraeger|Brillenträger|🕶️","versicherungBezahlt|Versicherung bezahlt|🧾","kontrollfahrt|Kontrollfahrt|🚗","taxiPruefung|Taxi Prüfung|🚕"].forEach(function(s){
+    var parts=s.split("|"),key=parts[0],lbl=parts[1],icon=parts[2];
+    p4.appendChild(chkField(lbl,icon,ns[key],function(v){ns[key]=v;}));
+  });
+  fc.appendChild(p4);
+  page.appendChild(fc);
+  page.appendChild(btn("💾 Speichern",function(){
+    if(!ns.vorname||!ns.nachname){alert("Vorname und Nachname sind Pflichtfelder");return;}
+    setState({students:S.students.concat([Object.assign({},ns,{id:Date.now(),name:ns.vorname+" "+ns.nachname,tags:[ns.status]})])});
+  },null,"btn"));
+  page.appendChild(btn("← Abbrechen",function(){setState({});},null,"btn btn-red"));
+  var app=document.getElementById("app");
+  app.innerHTML="";app.appendChild(mkHeader());app.appendChild(page);app.appendChild(mkNav());var sb=mkSidebar();if(sb)document.body.appendChild(sb);
+}
+
+// ── STUDENT DETAIL ──────────────────────────────────────────────────────────
+function pgStudentDetail(){
+  var s=S.student;if(!s)return pgSchuelerList();
+  var page=el("div","page");
+  var tab=0,editing=false,form=JSON.parse(JSON.stringify(s));
+  form.vorname=s.name.split(" ")[0]||"";form.nachname=s.name.split(" ").slice(1).join(" ")||"";
+  var cont=div({});page.appendChild(div({padding:"12px 0 4px"},[btn("← Zurück",function(){setState({page:"schueler",student:null});},{background:"none",border:"none",padding:"0",color:C.accent,fontSize:"14px",fontWeight:"600",cursor:"pointer"})]));
+  page.appendChild(cont);
+  function rebuild(){
+    cont.innerHTML="";
+    var hc=card([],{marginBottom:"10px"});
+    var hr=div({display:"flex",alignItems:"center",gap:"12px",marginBottom:"10px"});
+    hr.appendChild(div({width:"52px",height:"52px",borderRadius:"50%",background:"#1a2a4a",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"22px",flexShrink:"0"},["👤"]));
+    var hi=div({});hi.appendChild(div({fontWeight:"800",fontSize:"17px",color:"#fff"},[s.name]));hi.appendChild(div({marginTop:"4px"},[badge(FL[s.fallStatus||"aktiv"],FC[s.fallStatus||"aktiv"])]));
+    hr.appendChild(hi);hc.appendChild(hr);
+    var br=div({display:"flex",gap:"8px"});
+    br.appendChild(btn(editing?"✕ Abbrechen":"✕ Zurück",function(){if(editing){editing=false;form=JSON.parse(JSON.stringify(s));form.vorname=s.name.split(" ")[0]||"";form.nachname=s.name.split(" ").slice(1).join(" ")||"";rebuild();}else setState({page:"schueler",student:null});},{flex:"1",background:"transparent",border:"1.5px solid "+C.red,borderRadius:"12px",padding:"11px 0",color:C.red,fontWeight:"700",fontSize:"13px"}));
+    br.appendChild(btn(editing?"💾 Speichern":"✏️ Bearbeiten",function(){if(editing){var upd=Object.assign({},s,form,{name:form.vorname+" "+form.nachname});S.student=upd;s=upd;setState({students:S.students.map(function(x){return x.id===s.id?upd:x;})});}else{editing=true;rebuild();}},{flex:"1",background:"linear-gradient(135deg,"+C.blue+","+C.dark+")",border:"none",borderRadius:"12px",padding:"11px 0",color:"#fff",fontWeight:"700",fontSize:"13px"}));
+    hc.appendChild(br);cont.appendChild(hc);
+    var tb=el("div","tabs");
+    [["👤","Profil"],["📅","Termine"],["📊","Statistik"],["💳","Guthaben"]].forEach(function(t,i){
+      var b=el("button","tab"+(tab===i?" on":""));b.appendChild(span(t[0],{fontSize:"13px"}));b.appendChild(span(t[1],{fontSize:"9px"}));
+      (function(idx){b.addEventListener("click",function(){tab=idx;rebuild();});})(i);tb.appendChild(b);
+    });
+    cont.appendChild(tb);
+
+    if(tab===0){
+      if(editing){
+        var fc=card([]);fc.appendChild(sechdr("👤 Persönliche Daten"));
+        var nr=div({display:"flex",gap:"8px"});nr.appendChild(inpField("Vorname",form.vorname,function(v){form.vorname=v;}));nr.appendChild(inpField("Nachname",form.nachname,function(v){form.nachname=v;}));fc.appendChild(nr);
+        fc.appendChild(inpField("E-Mail",form.email,function(v){form.email=v;},"email"));fc.appendChild(inpField("Telefon",form.telefon,function(v){form.telefon=v;},"tel"));fc.appendChild(inpField("Geburtsdatum",form.geburtsdatum,function(v){form.geburtsdatum=v;},"date"));fc.appendChild(inpField("LFA Ablaufdatum",form.lernfahrAblauf||"",function(v){form.lernfahrAblauf=v;},"date"));fc.appendChild(inpField("LFA Pin",form.lfaPin||"",function(v){form.lfaPin=v;}));
+        fc.appendChild(inpField("Strasse",form.strasse||"",function(v){form.strasse=v;}));
+        var ar=div({display:"flex",gap:"6px"});ar.appendChild(inpField("PLZ",form.plz||"",function(v){form.plz=v;}));ar.appendChild(inpField("Ort",form.ort||"",function(v){form.ort=v;}));fc.appendChild(ar);
+        fc.appendChild(selField("Lehrplan",form.lehrplan||"Kategorie B - Auto (B)",function(v){form.lehrplan=v;},["Kategorie B - Auto (B)","BPT","Kontrollfahrt"]));fc.appendChild(selField("Getriebe",form.getriebe,function(v){form.getriebe=v;},["Automat","Manuell","Beide"]));fc.appendChild(selField("Fall-Status",form.fallStatus||"aktiv",function(v){form.fallStatus=v;},["aktiv","inaktiv","abgeschlossen","archiviert"]));
+        ["vkuAbsolviert|VKU absolviert|✅","brillentraeger|Brillenträger|🕶️","versicherungBezahlt|Versicherung|🧾","kontrollfahrt|Kontrollfahrt|🚗","taxiPruefung|Taxi Prüfung|🚕"].forEach(function(str){var p=str.split("|");fc.appendChild(chkField(p[1],p[2],!!form[p[0]],function(v){form[p[0]]=v;}));});
+        cont.appendChild(fc);
+      } else {
+        var vc=card([]);
+        [["✉️","E-MAIL",s.email||"—"],["📞","TELEFON",s.telefon||"—"],["📅","GEBURTSDATUM",fmtD(s.geburtsdatum)],["📅","LFA ABLAUF",fmtD(s.lernfahrAblauf)],["📍","ADRESSE",(s.strasse||"—")+(s.plz?" · "+s.plz:"")+" "+(s.ort||"")],["🚗","GETRIEBE",s.getriebe||"—"],["📚","LEHRPLAN",s.lehrplan||"—"],["🎫","GUTHABEN",(s.lektionenGuthaben||0)+" Lektionen"]].forEach(function(it){
+          var row=div({display:"flex",gap:"10px",padding:"9px 0",borderBottom:"1px solid "+C.border});
+          row.appendChild(span(it[0],{fontSize:"16px",width:"24px",textAlign:"center",flexShrink:"0"}));
+          var ri=div({});ri.appendChild(div({fontSize:"10px",fontWeight:"700",color:C.sub,marginBottom:"1px"},[it[1]]));ri.appendChild(div({fontSize:"13px",color:"#fff"},[it[2]]));row.appendChild(ri);vc.appendChild(row);
+        });
+        var bgs=div({display:"flex",flexWrap:"wrap",gap:"6px",paddingTop:"8px"});
+        if(s.vkuAbsolviert)bgs.appendChild(badge("✅ VKU",C.green));if(s.brillentraeger)bgs.appendChild(badge("🕶️ Brille","#555"));if(s.versicherungBezahlt)bgs.appendChild(badge("🧾 Vers.",C.green));if(s.kontrollfahrt)bgs.appendChild(badge("🚗 Kontroll.",C.blue));if(s.taxiPruefung)bgs.appendChild(badge("🚕 Taxi","#8e44ad"));
+        vc.appendChild(bgs);cont.appendChild(vc);
+      }
+    }
+    if(tab===1){
+      cont.appendChild(btn("+ Neuen Termin",function(){showNeuTermin(s,rebuild);},null,"btn"));
+      var leks=s.lektionen||[];
+      if(leks.length===0){cont.appendChild(card([div({textAlign:"center",padding:"20px 0",color:C.sub},["Noch keine Termine"])]));}
+      else{leks.slice().reverse().forEach(function(l){
+        var lc=div({background:C.card,borderRadius:"12px",padding:"12px",borderLeft:"3px solid "+(l.color||C.blue),marginBottom:"8px",border:"1px solid "+C.border});
+        var top=div({display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"4px"});
+        top.appendChild(div({},[div({fontWeight:"700",fontSize:"14px",color:"#fff"},[LT[l.type]?LT[l.type].label:l.type]),div({fontSize:"12px",color:C.sub},[fmtD(l.datum)+" · "+l.zeit+(l.zeitEnde?" – "+l.zeitEnde:"")])]));
+        top.appendChild(l.abgeschlossen?badge("✅ Abgeschl.",C.green):l.abgesagt?badge("❌ Abgesagt",C.red):badge("⏳ Ausst.",C.orange));
+        lc.appendChild(top);
+        if(l.type==="pruefung")lc.appendChild(l.result==="bestanden"?badge("✅ Bestanden",C.green):l.result==="nicht_bestanden"?badge("❌ Nicht best.",C.red):badge("⏳ Ergebnis offen",C.orange));
+        cont.appendChild(lc);
+      });}
+    }
+    if(tab===2){
+      var pruf=(s.lektionen||[]).filter(function(l){return l.type==="pruefung";});
+      var best2=pruf.filter(function(l){return l.result==="bestanden";}).length;
+      var rated2=pruf.filter(function(l){return l.result&&l.result!=="ausstehend";}).length;
+      var q2=rated2>0?Math.round(best2/rated2*10000)/100:0;
+      var sc=card([]);
+      [[String(pruf.length),"🎯 Prüfungen gesamt",C.sub],[String(best2),"✅ Bestanden",C.green],[String(pruf.length-best2),"❌ Nicht bestanden",C.red],[rated2>0?q2+"%":"—","📊 Erfolgsquote",q2>=80?C.green:C.orange]].forEach(function(it){
+        var row=div({display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid "+C.border});
+        row.appendChild(span(it[1],{color:"#fff"}));row.appendChild(span(it[0],{fontWeight:"700",color:it[2]}));sc.appendChild(row);
+      });
+      cont.appendChild(sc);
+    }
+    if(tab===3){
+      var gc=card([]);
+      var gg=div({display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"12px"});
+      [[s.lektionenGuthaben||0,"LEKTIONEN","Lektionen"],[s.chfGuthaben||0,"CHF","CHF Guthaben"]].forEach(function(it){
+        var ic=div({background:"#0d1e38",borderRadius:"12px",padding:"12px",textAlign:"center",border:"1px solid "+C.border});
+        ic.appendChild(div({fontSize:"11px",color:C.sub,marginBottom:"4px"},[it[1]]));
+        ic.appendChild(div({fontSize:"22px",fontWeight:"900",color:it[0]>0?C.green:C.red},[it[1]==="CHF"?"CHF "+it[0].toFixed(2):String(it[0])]));
+        gg.appendChild(ic);
+      });
+      gc.appendChild(gg);
+      gc.appendChild(btn("+ Lektionen hinzufügen",function(){var v=parseInt(prompt("Anzahl Lektionen:",10)||0);if(v>0){var upd=Object.assign({},s,{lektionenGuthaben:(s.lektionenGuthaben||0)+v});S.student=upd;s=upd;setState({students:S.students.map(function(x){return x.id===s.id?upd:x;})});}},null,"btn"));
+      gc.appendChild(btn("+ CHF hinzufügen",function(){var v=parseFloat(prompt("CHF Betrag:",0)||0);if(v>0){var upd=Object.assign({},s,{chfGuthaben:(s.chfGuthaben||0)+v});S.student=upd;s=upd;setState({students:S.students.map(function(x){return x.id===s.id?upd:x;})});}},null,"btn btn-green"));
+      cont.appendChild(gc);
+    }
+  }
+  rebuild();
+  return page;
+}
+
+function showNeuTermin(stu,onDone){
+  var typ=null,datum=tod(),zeit="09:00",notiz="",versuch="1",result=null;
+  function buildM(){
+    closeModal();var cc=[];
+    if(!typ){
+      cc.push(div({textAlign:"center",marginBottom:"16px"},[div({fontWeight:"800",fontSize:"18px",color:"#fff"},["Neuer Termin"]),div({fontSize:"13px",color:C.sub,marginTop:"2px"},[stu.name])]));
+      Object.keys(LT).forEach(function(k){
+        var v=LT[k];
+        var row=div({display:"flex",alignItems:"center",gap:"12px",padding:"14px",border:"2px solid "+v.color+"44",borderRadius:"14px",marginBottom:"10px",cursor:"pointer",background:v.color+"11"});
+        row.appendChild(div({width:"46px",height:"46px",borderRadius:"12px",background:v.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"20px",flexShrink:"0"},[k==="einzel45"?"⏱":k==="doppel90"?"⏱⏱":"🎯"]));
+        row.appendChild(div({flex:"1"},[div({fontWeight:"800",fontSize:"15px",color:v.color},[v.label]),div({fontSize:"12px",color:C.sub},[v.mins+" Min"])]));
+        row.appendChild(span("›",{color:C.sub,fontSize:"18px"}));
+        (function(key){row.addEventListener("click",function(){typ={id:key,label:LT[key].label,mins:LT[key].mins,color:LT[key].color};buildM();});})(k);
+        cc.push(row);
+      });
+      cc.push(btn("Abbrechen",closeModal,{width:"100%",background:"none",border:"none",padding:"10px 0",color:C.sub}));
+    } else {
+      var hdr=div({display:"flex",alignItems:"center",gap:"8px",marginBottom:"14px"});
+      hdr.appendChild(btn("‹",function(){typ=null;buildM();},{background:C.card,border:"1px solid "+C.border,borderRadius:"8px",padding:"5px 9px",color:"#fff"}));
+      hdr.appendChild(div({flex:"1",fontWeight:"800",fontSize:"15px",color:typ.color},[typ.label]));
+      hdr.appendChild(btn("✕",closeModal,{background:C.card,border:"1px solid "+C.border,borderRadius:"8px",width:"30px",height:"30px",color:"#fff"}));
+      cc.push(hdr);
+      cc.push(inpField("DATUM",datum,function(v){datum=v;},"date"));
+      cc.push(inpField("UHRZEIT",zeit,function(v){zeit=v;},"time"));
+      if(typ.id==="pruefung"){
+        cc.push(selField("VERSUCH",versuch,function(v){versuch=v;},["1","2","3","4+"]));
+        var rr=div({display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"6px",marginBottom:"10px"});
+        [["bestanden","✅ Best.",C.green],["nicht_bestanden","❌ Nicht",C.red],["ausstehend","⏳ Ausst.",C.orange]].forEach(function(it){
+          rr.appendChild(btn(it[1],function(){result=result===it[0]?null:it[0];buildM();},{padding:"8px 3px",borderRadius:"9px",border:"2px solid "+(result===it[0]?it[2]:it[2]+"44"),background:result===it[0]?it[2]+"22":C.card,color:result===it[0]?it[2]:C.sub,fontWeight:"700",fontSize:"10px"}));
+        });
+        cc.push(rr);
+      }
+      var ni=div({marginBottom:"10px"});ni.appendChild(el("label","lbl",null,["NOTIZ"]));var ta=el("textarea","inp",{minHeight:"50px",resize:"none"});ta.value=notiz;ta.addEventListener("input",function(){notiz=ta.value;});ni.appendChild(ta);cc.push(ni);
+      cc.push(btn("💾 Termin speichern",function(){
+        var lek={id:Date.now(),type:typ.id,label:typ.label,datum:datum,zeit:zeit,zeitEnde:calcEnd(zeit,typ.mins),versuch:typ.id==="pruefung"?parseInt(versuch):null,result:typ.id==="pruefung"?result:null,notiz:notiz,color:typ.color,abgeschlossen:false,abgesagt:false,studentId:stu.id,studentName:stu.name};
+        var fallStatus=result==="bestanden"?"archiviert":(stu.fallStatus||"aktiv");
+        var upd=Object.assign({},stu,{fallStatus:fallStatus,lektionen:(stu.lektionen||[]).concat([lek])});
+        if(S.student&&S.student.id===stu.id)S.student=upd;
+        setState({students:S.students.map(function(x){return x.id===stu.id?upd:x;})});
+        closeModal();if(onDone)onDone();
+      },null,"btn"));
+      cc.push(btn("Abbrechen",closeModal,null,"btn btn-red"));
+    }
+    openModal(cc);
+  }
+  buildM();
+}
+
+// ── KALENDER ─────────────────────────────────────────────────────────────
+function pgKalender(){
+  var page=el("div","page");
+  var view="agenda",wo=0,selDay=null;
+  page.appendChild(div({padding:"20px 0 4px",fontSize:"20px",fontWeight:"800",color:"#fff"},["📅 Kalender"]));
+  var tb=el("div","tabs");
+  [["agenda","📋 AGENDA"],["kalender","📅 WOCHE"],["sync","🔗 SYNC"]].forEach(function(it){
+    var b=el("button","tab"+(view===it[0]?" on":""));b.appendChild(span(it[1],{fontSize:"11px"}));
+    (function(v){b.addEventListener("click",function(){view=v;selDay=null;rebuild();});})(it[0]);
+    tb.appendChild(b);
+  });
+  page.appendChild(tb);
+  var cont=div({});page.appendChild(cont);
+
+  function getEvs(date){return S.students.flatMap(function(s){return(s.lektionen||[]).filter(function(l){return l.datum===ds(date);}).map(function(l){return Object.assign({},l,{studentName:s.name,studentId:s.id});});}).sort(function(a,b){return a.zeit.localeCompare(b.zeit);});}
+
+  function rebuild(){
+    cont.innerHTML="";
+    var week=getWeek(wo);
+    cont.appendChild(btn("+ Neues Event",function(){showAddEvent(null,week[0]);},null,"btn"));
+
+    if(view==="agenda"||view==="kalender"){
+      var nc=card([],{marginBottom:"10px"});
+      var nr2=div({display:"flex",alignItems:"center",justifyContent:"space-between"});
+      nr2.appendChild(btn("‹",function(){wo--;rebuild();},{background:"#1a2a4a",border:"none",borderRadius:"9px",width:"34px",height:"34px",color:"#fff",fontSize:"16px",fontWeight:"700"}));
+      var mid=div({textAlign:"center"});
+      mid.appendChild(div({fontWeight:"700",color:"#fff",fontSize:"12px"},[week[0].getDate()+". – "+week[6].toLocaleDateString("de-CH",{day:"numeric",month:"long",year:"numeric"})]));
+      if(wo!==0)mid.appendChild(btn("← Heute",function(){wo=0;rebuild();},{background:"none",border:"none",color:C.blue,fontSize:"11px",fontWeight:"600",cursor:"pointer",display:"block"}));
+      nr2.appendChild(mid);
+      nr2.appendChild(btn("›",function(){wo++;rebuild();},{background:"#1a2a4a",border:"none",borderRadius:"9px",width:"34px",height:"34px",color:"#fff",fontSize:"16px",fontWeight:"700"}));
+      nc.appendChild(nr2);cont.appendChild(nc);
+    }
+
+    if(view==="agenda"){
+      var strip=card([],{marginBottom:"10px"});
+      var sg=div({display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:"3px"});
+      week.forEach(function(day){
+        var cnt=getEvs(day).length;
+        var sel=selDay?ds(day)===selDay:isToday(day);
+        var dc=div({textAlign:"center",cursor:"pointer",borderRadius:"10px",padding:"7px 2px",background:sel?C.blue:isToday(day)?"#1a2a4a":"transparent",border:"2px solid "+(sel?C.blue:isToday(day)?C.blue+"44":"transparent")});
+        dc.appendChild(div({fontSize:"8px",color:sel?"#fff":C.sub,fontWeight:"600",marginBottom:"2px"},[day.toLocaleDateString("de-CH",{weekday:"short"}).toUpperCase()]));
+        dc.appendChild(div({fontSize:"15px",fontWeight:"800",color:sel?"#fff":isToday(day)?C.accent:"#fff"},[String(day.getDate())]));
+        if(cnt>0)dc.appendChild(div({width:"5px",height:"5px",borderRadius:"50%",background:sel?"#fff":C.blue,margin:"3px auto 0"},null));
+        (function(d2){dc.addEventListener("click",function(){selDay=ds(d2);rebuild();});})(day);
+        sg.appendChild(dc);
+      });
+      strip.appendChild(sg);cont.appendChild(strip);
+
+      var selDate=selDay?new Date(selDay+"T12:00:00"):week.find(function(d2){return isToday(d2);})||week[0];
+      var evs=getEvs(selDate);
+      var dt=div({display:"flex",alignItems:"center",justifyContent:"space-between",padding:"6px 0 8px"});
+      var dtl=div({});dtl.appendChild(span(selDate.toLocaleDateString("de-CH",{weekday:"long"}),{fontWeight:"800",fontSize:"15px",color:isToday(selDate)?C.accent:"#fff"}));dtl.appendChild(span(" "+selDate.toLocaleDateString("de-CH",{day:"numeric",month:"long",year:"numeric"}),{fontSize:"12px",color:C.sub}));
+      dt.appendChild(dtl);
+      dt.appendChild(btn("+ Event",function(){showAddEvent(null,selDate);},{background:C.blue,border:"none",borderRadius:"8px",padding:"6px 11px",color:"#fff",fontWeight:"700",fontSize:"12px"}));
+      cont.appendChild(dt);
+      var dc2=card([]);
+      if(evs.length===0){dc2.appendChild(div({textAlign:"center",padding:"18px 0",color:C.sub},["☀️ Keine Termine"]));}
+      else{evs.forEach(function(e){
+        var row=el("div","evrow");
+        var chk=div({width:"20px",height:"20px",borderRadius:"4px",border:"2px solid "+(e.abgeschlossen?C.green:e.abgesagt?C.red:C.blue),background:e.abgeschlossen?C.green:e.abgesagt?C.red:"transparent",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"10px",color:"#fff",fontWeight:"900",flexShrink:"0"},[e.abgeschlossen?"✓":e.abgesagt?"✕":""]);
+        row.appendChild(chk);row.appendChild(span(e.zeit,{fontSize:"12px",fontWeight:"700",color:"#fff",minWidth:"40px",flexShrink:"0"}));
+        var ei=div({flex:"1",minWidth:"0"});ei.appendChild(div({fontSize:"13px",color:e.abgeschlossen?C.sub:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"},[e.studentName||e.title||""]));
+        if(e.type&&LT[e.type])ei.appendChild(div({fontSize:"9px",color:LT[e.type].color,fontWeight:"600"},[LT[e.type].label]));
+        row.appendChild(ei);row.appendChild(span("›",{color:C.sub,fontSize:"14px"}));
+        (function(ev,dstr){row.addEventListener("click",function(){showEvDetail(ev,dstr,rebuild);});})(e,ds(selDate));
+        dc2.appendChild(row);
+      });}
+      cont.appendChild(dc2);
+    }
+
+    if(view==="kalender"){
+      var week2=getWeek(wo);
+      var gh=div({display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:"2px",marginBottom:"4px"});
+      ["Mo","Di","Mi","Do","Fr","Sa","So"].forEach(function(dn){gh.appendChild(div({textAlign:"center",fontSize:"9px",fontWeight:"700",color:C.sub},[dn]));});
+      cont.appendChild(gh);
+      var grid=div({display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:"3px",marginBottom:"12px"});
+      week2.forEach(function(day){
+        var evs2=getEvs(day);
+        var gc=div({minHeight:"58px",background:isToday(day)?"#1a2a4a":C.card,borderRadius:"8px",padding:"5px 3px",border:"1px solid "+(isToday(day)?C.blue:C.border),cursor:"pointer"});
+        gc.appendChild(div({fontSize:"12px",fontWeight:"800",color:isToday(day)?C.accent:"#fff",textAlign:"center",marginBottom:"2px"},[String(day.getDate())]));
+        evs2.slice(0,2).forEach(function(e){gc.appendChild(div({background:LT[e.type]?LT[e.type].color:C.blue,borderRadius:"3px",padding:"1px 3px",fontSize:"7px",fontWeight:"700",color:"#fff",marginBottom:"1px",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"},[e.zeit+" "+(e.studentName||"")]));});
+        if(evs2.length>2)gc.appendChild(div({fontSize:"7px",color:C.sub,textAlign:"center"},["+"+(evs2.length-2)]));
+        (function(d2){gc.addEventListener("click",function(){selDay=ds(d2);view="agenda";rebuild();});})(day);
+        grid.appendChild(gc);
+      });
+      cont.appendChild(grid);
+      week2.forEach(function(day){
+        var evs3=getEvs(day);if(evs3.length===0)return;
+        cont.appendChild(div({fontWeight:"700",fontSize:"12px",color:isToday(day)?C.accent:C.blue,padding:"6px 0 2px"},[day.toLocaleDateString("de-CH",{weekday:"long",day:"numeric",month:"long"})]));
+        var lc=div({background:C.card,borderRadius:"12px",padding:"6px 12px",border:"1px solid "+C.border,marginBottom:"6px"});
+        evs3.forEach(function(e){
+          var row=el("div","evrow");
+          row.appendChild(span(e.zeit,{fontSize:"12px",fontWeight:"700",color:"#fff",minWidth:"40px"}));
+          row.appendChild(div({flex:"1",color:"#fff",fontSize:"13px"},[e.studentName||""]));
+          row.appendChild(span("›",{color:C.sub,fontSize:"12px"}));
+          (function(ev,dstr){row.addEventListener("click",function(){showEvDetail(ev,dstr,rebuild);});})(e,ds(day));
+          lc.appendChild(row);
+        });
+        cont.appendChild(lc);
+      });
+    }
+
+    if(view==="sync"){
+      [["📅","Google Calendar","gc"],["🍎","Apple iCloud","ac"],["🌐","Amelia Buchungen","am"]].forEach(function(it){
+        var connected=S["sync_"+it[2]];
+        var sc=card([],{marginBottom:"10px"});
+        var row=div({display:"flex",alignItems:"center",gap:"12px"});
+        row.appendChild(div({width:"42px",height:"42px",borderRadius:"12px",background:"#1a2a4a",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"20px",flexShrink:"0"},[it[0]]));
+        var inf=div({flex:"1"});inf.appendChild(div({fontWeight:"800",color:"#fff"},[it[1]]));inf.appendChild(div({fontSize:"12px",color:connected?C.green:C.sub},[connected?"● Verbunden":"● Nicht verbunden"]));
+        row.appendChild(inf);
+        (function(key){row.appendChild(btn(connected?"Trennen":"Verbinden",function(){
+          if(connected){S["sync_"+key]=false;rebuild();}
+          else if(key==="am"){var url=prompt("Website URL:","https://fahrschulebern-one.ch");if(url){S["sync_am"]=true;var a={id:Date.now(),vorname:"Lisa",nachname:"Meier",email:"lisa.meier@gmail.com",telefon:"+41 79 123 45 67",geburtsdatum:"15.03.2002",service:"Kategorie B",angemeldetAm:new Date().toLocaleDateString("de-CH")};setState({anfragen:S.anfragen.concat([a]);});}}
+          else{S["sync_"+key]=true;rebuild();}
+        },{background:connected?"transparent":"linear-gradient(135deg,#4285f4,#0d47a1)",border:connected?"1px solid "+C.red:"none",borderRadius:"9px",padding:"7px 12px",color:connected?C.red:"#fff",fontWeight:"700",fontSize:"12px"}));})(it[2]);
+        sc.appendChild(row);cont.appendChild(sc);
+      });
+    }
+  }
+  rebuild();
+  return page;
+}
+
+function showAddEvent(existingDay,defaultDate){
+  var addDay=existingDay||ds(defaultDate||new Date());
+  var qaS="",qaT="einzel45",qaZ="09:00",qaN="",qaV="1",qaR=null;
+  function buildM(){
+    closeModal();var cc=[];
+    var hdr=div({display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"12px"});
+    hdr.appendChild(div({fontWeight:"800",fontSize:"16px",color:"#fff"},["+ Neues Event"]));
+    hdr.appendChild(btn("✕",closeModal,{background:C.card,border:"1px solid "+C.border,borderRadius:"9px",width:"32px",height:"32px",color:"#fff"}));
+    cc.push(hdr);
+    cc.push(div({background:"#0d1e38",borderRadius:"9px",padding:"8px 12px",marginBottom:"12px",border:"1px solid "+C.blue},[div({fontSize:"10px",color:C.sub},["DATUM"]),div({fontWeight:"700",color:C.blue,fontSize:"13px"},[fmtD(addDay)])]));
+    cc.push(div({fontSize:"11px",fontWeight:"700",color:C.sub,marginBottom:"6px"},["TYP"]));
+    var tr=div({display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"6px",marginBottom:"12px"});
+    Object.keys(LT).forEach(function(k){
+      var v=LT[k];
+      var tb2=btn(k==="einzel45"?"⏱\nEinzel\n45 Min":k==="doppel90"?"⏱⏱\nDoppel\n90 Min":"🎯\nPrüfung\n60 Min",function(){qaT=k;buildM();},{padding:"9px 4px",borderRadius:"10px",border:"2px solid "+(qaT===k?v.color:v.color+"44"),background:qaT===k?v.color+"22":C.card,color:qaT===k?v.color:C.sub,fontWeight:"700",fontSize:"9px",whiteSpace:"pre-line",lineHeight:"1.3"});
+      tr.appendChild(tb2);
+    });
+    cc.push(tr);
+    var sd=div({marginBottom:"10px"});sd.appendChild(el("label","lbl",null,["SCHÜLER"]));
+    var ss=el("select","inp",{marginBottom:"0"});
+    ss.appendChild(el("option",null,null,["Schüler auswählen..."]));
+    S.students.filter(function(s){return s.fallStatus!=="archiviert";}).forEach(function(s){var op=el("option",null,null,[s.name]);op.value=String(s.id);if(qaS===String(s.id))op.selected=true;ss.appendChild(op);});
+    ss.addEventListener("change",function(){qaS=ss.value;});
+    sd.appendChild(ss);cc.push(sd);
+    cc.push(inpField("UHRZEIT",qaZ,function(v){qaZ=v;},"time"));
+    if(qaT==="pruefung"){
+      cc.push(selField("VERSUCH",qaV,function(v){qaV=v;},["1","2","3","4+"]));
+      var rr=div({display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"6px",marginBottom:"10px"});
+      [["bestanden","✅ Best.",C.green],["nicht_bestanden","❌ Nicht",C.red],["ausstehend","⏳ Ausst.",C.orange]].forEach(function(it){
+        rr.appendChild(btn(it[1],function(){qaR=qaR===it[0]?null:it[0];buildM();},{padding:"8px 3px",borderRadius:"9px",border:"2px solid "+(qaR===it[0]?it[2]:it[2]+"44"),background:qaR===it[0]?it[2]+"22":C.card,color:qaR===it[0]?it[2]:C.sub,fontWeight:"700",fontSize:"10px"}));
+      });
+      cc.push(rr);
+    }
+    var ni=div({marginBottom:"10px"});ni.appendChild(el("label","lbl",null,["NOTIZ"]));var ta=el("textarea","inp",{minHeight:"50px",resize:"none"});ta.value=qaN;ta.addEventListener("input",function(){qaN=ta.value;});ni.appendChild(ta);cc.push(ni);
+    cc.push(btn("💾 Event speichern",function(){
+      if(!qaS)return;
+      var stu=S.students.find(function(x){return x.id===parseInt(qaS);});if(!stu)return;
+      var td=LT[qaT],lek={id:Date.now(),type:qaT,label:td.label,datum:addDay,zeit:qaZ,zeitEnde:calcEnd(qaZ,td.mins),versuch:qaT==="pruefung"?parseInt(qaV):null,result:qaT==="pruefung"?qaR:null,notiz:qaN,color:td.color,abgeschlossen:false,abgesagt:false,studentId:stu.id,studentName:stu.name};
+      var upd=Object.assign({},stu,{lektionen:(stu.lektionen||[]).concat([lek])});
+      setState({students:S.students.map(function(x){return x.id===stu.id?upd:x;})});
+      closeModal();
+    },null,"btn"));
+    cc.push(btn("Abbrechen",closeModal,null,"btn btn-red"));
+    openModal(cc);
+  }
+  buildM();
+}
+
+function showEvDetail(e,dstr,onUpdate){
+  var stu=S.students.find(function(x){return x.id===e.studentId;});
+  var cc=[],td=LT[e.type]||{label:"Termin",mins:45,color:C.blue};
+  var hdr=div({display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"12px"});
+  hdr.appendChild(badge(td.label,td.color));hdr.appendChild(btn("✕",closeModal,{background:C.card,border:"1px solid "+C.border,borderRadius:"9px",width:"30px",height:"30px",color:"#fff"}));
+  cc.push(hdr);cc.push(div({fontSize:"22px",fontWeight:"900",color:"#fff",marginBottom:"12px"},[stu?stu.name:e.studentName||""]));
+  if(stu){
+    var gi=div({background:C.card,borderRadius:"12px",padding:"12px",marginBottom:"10px",border:"1px solid "+C.border});
+    if(stu.telefon){var tr=div({display:"flex",alignItems:"center",gap:"8px",marginBottom:"8px"});tr.appendChild(span(stu.telefon,{fontSize:"14px",color:"#fff",fontWeight:"600"}));var wa=el("a",null,{background:"#25d366",borderRadius:"50%",width:"32px",height:"32px",display:"flex",alignItems:"center",justifyContent:"center",textDecoration:"none",fontSize:"16px"},["💬"]);wa.href="https://wa.me/"+stu.telefon.replace(/\s/g,"");tr.appendChild(wa);var ca=el("a",null,{background:C.blue,borderRadius:"50%",width:"32px",height:"32px",display:"flex",alignItems:"center",justifyContent:"center",textDecoration:"none",fontSize:"16px"},["📞"]);ca.href="tel:"+stu.telefon;tr.appendChild(ca);gi.appendChild(tr);}
+    var lg=div({background:"#0d1e38",borderRadius:"10px",padding:"10px",border:"1px solid "+C.border});lg.appendChild(div({fontSize:"10px",color:C.sub},["LEKTIONEN-GUTHABEN"]));lg.appendChild(div({fontSize:"18px",fontWeight:"900",color:(stu.lektionenGuthaben||0)>0?C.green:C.red},[(stu.lektionenGuthaben||0)+" Lektionen"]));gi.appendChild(lg);cc.push(gi);
+  }
+  [["🕐","START",fmtD(dstr)+", "+e.zeit],["🕐","ENDE",fmtD(dstr)+", "+(e.zeitEnde||calcEnd(e.zeit,td.mins))],["⏱","DAUER",td.mins+" Min"],["👨‍🏫","FAHRLEHRER",(S.profil.vorname||""+" "+S.profil.nachname||"").trim()||"—"]].forEach(function(it){
+    var row=div({display:"flex",gap:"10px",padding:"10px 0",borderBottom:"1px solid "+C.border});
+    row.appendChild(span(it[0],{fontSize:"16px",color:C.blue}));row.appendChild(div({},[div({fontSize:"10px",fontWeight:"700",color:C.sub,marginBottom:"1px"},[it[1]]),div({fontSize:"13px",fontWeight:"700",color:"#fff"},[it[2]])]));cc.push(row);
+  });
+  if(!e.abgeschlossen&&!e.abgesagt){
+    cc.push(btn("✅ Lektion abschliessen",function(){
+      if(!stu)return;
+      var upd=Object.assign({},stu,{lektionenGuthaben:Math.max(0,(stu.lektionenGuthaben||0)-1),lektionen:(stu.lektionen||[]).map(function(l){return l.id===e.id?Object.assign({},l,{abgeschlossen:true}):l;})});
+      setState({students:S.students.map(function(x){return x.id===stu.id?upd:x;})});
+      closeModal();if(onUpdate)onUpdate();
+    },null,"btn btn-green"));
+    cc.push(btn("Termin absagen",function(){
+      if(!stu)return;
+      var upd=Object.assign({},stu,{lektionen:(stu.lektionen||[]).map(function(l){return l.id===e.id?Object.assign({},l,{abgesagt:true}):l;})});
+      setState({students:S.students.map(function(x){return x.id===stu.id?upd:x;})});
+      closeModal();if(onUpdate)onUpdate();
+    },{marginBottom:"0"},null));
+  } else {cc.push(div({marginTop:"12px",background:e.abgeschlossen?"#0a2e1a":"#2e0a0a",border:"1px solid "+(e.abgeschlossen?C.green:C.red),borderRadius:"12px",padding:"12px 14px"},[div({fontWeight:"800",color:e.abgeschlossen?C.green:C.red},[e.abgeschlossen?"✅ Lektion abgeschlossen":"❌ Termin abgesagt"])]));}
+  openModal(cc);
+}
+
+// ── PRUEFUNGSSTATISTIK ──────────────────────────────────────────────────────
+function pgPruefung(){
+  var page=el("div","page");
+  page.appendChild(div({padding:"20px 0 4px",fontSize:"20px",fontWeight:"800",color:"#fff"},["📊 Prüfungsstatistik"]));
+  var all=S.students.flatMap(function(s){return(s.lektionen||[]).filter(function(l){return l.type==="pruefung";}).map(function(l){return Object.assign({},l,{studentName:s.name});});});
+  var best=all.filter(function(l){return l.result==="bestanden";}).length;
+  var rated=all.filter(function(l){return l.result&&l.result!=="ausstehend";}).length;
+  var q=rated>0?Math.round(best/rated*10000)/100:0;
+  if(all.length===0){page.appendChild(card([div({textAlign:"center",padding:"30px 0"},[div({fontSize:"36px",marginBottom:"8px"},["📊"]),div({fontWeight:"700",color:"#fff"},["Noch keine Prüfungen"])])]));return page;}
+  var sc=card([]);
+  [[String(all.length),"🎯 Gesamt",C.sub],[String(best),"✅ Bestanden",C.green],[String(all.length-best),"❌ Nicht best.",C.red],[rated>0?q+"%":"—","📊 Erfolgsquote",q>=80?C.green:C.orange]].forEach(function(it){
+    var row=div({display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid "+C.border});
+    row.appendChild(span(it[1],{color:"#fff"}));row.appendChild(span(it[0],{fontWeight:"700",color:it[2]}));sc.appendChild(row);
+  });
+  page.appendChild(sc);
+  page.appendChild(div({fontWeight:"800",color:"#fff",margin:"10px 0 8px"},["Alle Prüfungen"]));
+  var lc=card([]);
+  all.slice().reverse().forEach(function(p,i){
+    var row=div({display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:i<all.length-1?"1px solid "+C.border:"none"});
+    row.appendChild(div({},[div({fontWeight:"600",fontSize:"13px",color:"#fff"},[p.studentName]),div({fontSize:"11px",color:C.sub},[fmtD(p.datum)+" · "+(p.versuch||1)+". Versuch"])]));
+    row.appendChild(p.result==="bestanden"?badge("✅ Best.",C.green):p.result==="nicht_bestanden"?badge("❌ Nicht",C.red):badge("⏳ Offen",C.orange));
+    lc.appendChild(row);
+  });
+  page.appendChild(lc);
+  return page;
+}
+
+// ── PROFIL ──────────────────────────────────────────────────────────────────
+function pgProfil(){
+  var page=el("div","page");
+  var editing=false,lp=Object.assign({},S.profil);
+  page.appendChild(div({padding:"20px 0 4px",fontSize:"20px",fontWeight:"800",color:"#fff"},["👤 Mein Profil"]));
+  var cont=div({});page.appendChild(cont);
+  function rebuild(){
+    cont.innerHTML="";
+    var ini=((lp.vorname||"?")[0]+(lp.nachname||"?")[0]).toUpperCase();
+    var av=card([],{textAlign:"center",padding:"20px 14px",marginBottom:"10px"});
+    if(lp.foto){var img=el("img",null,{width:"72px",height:"72px",borderRadius:"50%",objectFit:"cover",margin:"0 auto 8px",display:"block",border:"3px solid "+C.accent});img.src=lp.foto;av.appendChild(img);}
+    else{av.appendChild(div({width:"72px",height:"72px",borderRadius:"50%",background:"linear-gradient(135deg,"+C.accent+",#e67e22)",display:"flex",alignItems:"center",justifyContent:"center",color:"#000",fontWeight:"900",fontSize:"24px",margin:"0 auto 8px"},[ini]));}
+    av.appendChild(div({fontWeight:"800",fontSize:"17px",color:"#fff",marginBottom:"2px"},[(lp.vorname||"")+" "+(lp.nachname||"")]));
+    av.appendChild(div({fontSize:"13px",color:C.accent,fontWeight:"600"},[lp.rolle||"Fahrlehrer"]));
+    if(editing){
+      var fl=el("label",null,{display:"inline-block",marginTop:"10px",cursor:"pointer"});
+      fl.appendChild(div({background:C.card,border:"1.5px dashed "+C.border,borderRadius:"9px",padding:"6px 14px",color:C.sub,fontSize:"12px",fontWeight:"600"},["📷 Foto ändern"]));
+      var fi=el("input",null,{display:"none"});fi.type="file";fi.accept="image/*";
+      fi.addEventListener("change",function(e){var f=e.target.files[0];if(!f)return;var r=new FileReader();r.onload=function(ev){lp.foto=ev.target.result;rebuild();};r.readAsDataURL(f);});
+      fl.appendChild(fi);av.appendChild(fl);
+    } else {av.appendChild(btn("✏️ Profil bearbeiten",function(){editing=true;rebuild();},{marginTop:"10px",background:"linear-gradient(135deg,"+C.blue+","+C.dark+")",border:"none",borderRadius:"12px",padding:"9px 24px",color:"#fff",fontWeight:"700",fontSize:"13px"}));}
+    cont.appendChild(av);
+    if(editing){
+      var fc=card([],{marginBottom:"10px"});fc.appendChild(sechdr("👤 Persönliche Informationen"));
+      var nr=div({display:"flex",gap:"8px"});nr.appendChild(inpField("Vorname",lp.vorname,function(v){lp.vorname=v;}));nr.appendChild(inpField("Nachname",lp.nachname,function(v){lp.nachname=v;}));fc.appendChild(nr);
+      fc.appendChild(inpField("E-Mail",lp.email,function(v){lp.email=v;},"email"));fc.appendChild(inpField("Telefon",lp.telefon,function(v){lp.telefon=v;},"tel"));fc.appendChild(inpField("Standort",lp.standort,function(v){lp.standort=v;}));fc.appendChild(selField("Rolle",lp.rolle,function(v){lp.rolle=v;},["Fahrlehrer","Fahrlehrerin","Administrator","Inhaber"]));
+      var ni=div({});ni.appendChild(el("label","lbl",null,["NOTIZEN"]));var ta=el("textarea","inp",{minHeight:"60px",resize:"none"});ta.value=lp.notiz||"";ta.addEventListener("input",function(){lp.notiz=ta.value;});ni.appendChild(ta);fc.appendChild(ni);
+      cont.appendChild(fc);
+      var br=div({display:"flex",gap:"8px",marginBottom:"12px"});
+      br.appendChild(btn("✕ Abbrechen",function(){editing=false;lp=Object.assign({},S.profil);rebuild();},null,"btn btn-red"));
+      br.appendChild(btn("💾 Speichern",function(){Object.assign(S.profil,lp);editing=false;setState({profil:S.profil});},null,"btn"));
+      cont.appendChild(br);
+    } else {
+      var vc=card([],{marginBottom:"10px"});
+      [["✉️","E-MAIL",lp.email||"—"],["📞","TELEFON",lp.telefon||"—"],["🏫","STANDORT",lp.standort||"—"],["👨‍🏫","ROLLE",lp.rolle||"Fahrlehrer"]].forEach(function(it){
+        var row=div({display:"flex",gap:"10px",padding:"8px 0",borderBottom:"1px solid "+C.border});
+        row.appendChild(span(it[0],{fontSize:"16px",width:"24px",textAlign:"center"}));
+        row.appendChild(div({},[div({fontSize:"10px",fontWeight:"700",color:C.sub,marginBottom:"1px"},[it[1]]),div({fontSize:"13px",color:"#fff"},[it[2]])]));
+        vc.appendChild(row);
+      });
+      cont.appendChild(vc);
+    }
+    cont.appendChild(card([div({textAlign:"center",padding:"10px 0"},[div({fontSize:"15px",fontWeight:"900",color:"#fff"},[span("my"),span("One",{color:C.blue})]),div({fontSize:"9px",letterSpacing:"3px",color:C.sub,marginBottom:"6px"},["FAHRSCHULE"]),div({fontSize:"11px",color:C.sub},["Version 1.0 · © 2026 myOne Fahrschule"])])]));
+  }
+  rebuild();
+  return page;
+}
+
+// ── MAIN RENDER ─────────────────────────────────────────────────────────────
+function render(){
+  var app=document.getElementById("app");
+  app.innerHTML="";
+  var wrap=el("div","wrap");
+  wrap.appendChild(mkHeader());
+  var content;
+  try {
+    if(S.page==="dashboard")content=pgDashboard();
+    else if(S.page==="schueler"&&S.student)content=pgStudentDetail();
+    else if(S.page==="schueler")content=pgSchuelerList();
+    else if(S.page==="kalender")content=pgKalender();
+    else if(S.page==="pruefung")content=pgPruefung();
+    else if(S.page==="profil")content=pgProfil();
+    else content=pgDashboard();
+  } catch(err) {
+    content=el("div","page",null,[div({padding:"20px",color:C.red,fontFamily:"monospace",fontSize:"13px"},[div({fontWeight:"700",marginBottom:"8px",fontSize:"16px"},["⚠️ Fehler:"]),div({background:"#1a0a0a",padding:"12px",borderRadius:"8px",whiteSpace:"pre-wrap",overflowX:"auto"},[err.message+"\n"+(err.stack||"")])])]);
+  }
+  wrap.appendChild(content);
+  wrap.appendChild(mkNav());
+  app.appendChild(wrap);
+  var sb=mkSidebar();if(sb)document.body.appendChild(sb);
+}
+render();
+</script>
+</body>
+</html>
